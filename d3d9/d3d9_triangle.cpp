@@ -22,21 +22,38 @@ struct VS_INPUT {
 
 struct VS_OUTPUT {
   float4 Position : POSITION;
+  float4 VaryingPosition : COLOR0;
 };
 
 VS_OUTPUT main( VS_INPUT IN ) {
   VS_OUTPUT OUT;
-  OUT.Position = float4(IN.Position, 0.6f);
+  OUT.Position = float4(IN.Position, 1.0f);
+  OUT.VaryingPosition = float4(IN.Position * 0.5f + 0.5f, 1.0f);
 
   return OUT;
 }
 
 )";
 
-const std::string g_pixelShaderCode = R"(
-
+const std::string g_dsPixelShaderCode = R"(
 struct VS_OUTPUT {
-  float4 Position : POSITION;
+  float4 Position : COLOR0;
+};
+
+struct PS_OUTPUT {
+  float4 Colour   : COLOR;
+};
+
+PS_OUTPUT main( VS_OUTPUT IN ) {
+  PS_OUTPUT OUT;
+  OUT.Colour = float4(1.0f, 1.0f, 1.0f, 1.0f);
+  return OUT;
+}
+)";
+
+const std::string g_pixelShaderCode = R"(
+struct VS_OUTPUT {
+  float4 Position : COLOR0;
 };
 
 struct PS_OUTPUT {
@@ -47,14 +64,12 @@ sampler g_texDepth : register( s0 );
 
 PS_OUTPUT main( VS_OUTPUT IN ) {
   PS_OUTPUT OUT;
-
-  OUT.Colour = tex2D(g_texDepth, float2(0, 0));
-  OUT.Colour = 1.0;
-
+  //OUT.Colour = (tex2D(g_texDepth, float2(IN.Position.x, IN.Position.y)) - 0.0f) * 400.0f;
+  OUT.Colour = (tex2D(g_texDepth, float2(IN.Position.x, IN.Position.y)) - 0.4f) * 400.0f;
+  // OUT.Colour = (tex2D(g_texDepth, float2(IN.Position.x, IN.Position.y))) * 400;
+  OUT.Colour.w = 1.0;
   return OUT;
 }
-
-
 )";
 
 class TriangleApp {
@@ -75,44 +90,6 @@ public:
 
     std::cout << format("Using adapter: ", adapterId.Description) << std::endl;
 
-    auto CheckSRGBFormat = [&](D3DFORMAT fmt, const char* name) {
-      HRESULT status = m_d3d->CheckDeviceFormat(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_TEXTURE, fmt);
-      std::cout << format("(linear) ", name, ": ", SUCCEEDED(status) ? "ok" : "nope") << std::endl;
-
-      status = m_d3d->CheckDeviceFormat(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_QUERY_SRGBREAD, D3DRTYPE_TEXTURE, fmt);
-      std::cout << format("(srgb) ", name, ": ", SUCCEEDED(status) ? "ok" : "nope") << std::endl;
-    };
-
-    CheckSRGBFormat(D3DFMT_R5G6B5,       "R5G6B5");
-    CheckSRGBFormat(D3DFMT_X1R5G5B5,     "X1R5G5B5");
-    CheckSRGBFormat(D3DFMT_A1R5G5B5,     "A1R5G5B5");
-    CheckSRGBFormat(D3DFMT_A4R4G4B4,     "A4R4G4B4");
-    CheckSRGBFormat(D3DFMT_X4R4G4B4,     "X4R4G4B4");
-    CheckSRGBFormat(D3DFMT_G16R16,       "G16R16");
-    CheckSRGBFormat(D3DFMT_A2R10G10B10,  "A2R10G10B10");
-    CheckSRGBFormat(D3DFMT_A16B16G16R16, "A16B16G16R16");
-
-    //
-
-    DWORD quality;
-    status = m_d3d->CheckDepthStencilMatch(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, D3DFMT_A8R8G8B8, D3DFMT_D24S8);
-    status = m_d3d->CheckDeviceFormat(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_SURFACE, D3DFMT_A8R8G8B8);
-    status = m_d3d->CheckDeviceFormatConversion(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, D3DFMT_A8R8G8B8);
-    status = m_d3d->CheckDeviceMultiSampleType(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, FALSE, D3DMULTISAMPLE_NONE, &quality);
-    status = m_d3d->CheckDeviceMultiSampleType(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, TRUE, D3DMULTISAMPLE_NONE, &quality);
-    status = m_d3d->CheckDeviceType(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, D3DFMT_A8R8G8B8, FALSE);
-    status = m_d3d->CheckDeviceType(adapter, D3DDEVTYPE_HAL, D3DFMT_A8R8G8B8, D3DFMT_A8R8G8B8, TRUE);
-
-    // NULL
-    constexpr D3DFORMAT NullFormat = D3DFORMAT(MAKEFOURCC('N', 'U', 'L', 'L'));
-
-    status = m_d3d->CheckDepthStencilMatch(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, NullFormat, D3DFMT_D24S8);
-    status = m_d3d->CheckDeviceFormat(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_RENDERTARGET, D3DRTYPE_SURFACE, NullFormat);
-    status = m_d3d->CheckDeviceFormat(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, NullFormat);
-    status = m_d3d->CheckDeviceFormatConversion(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, NullFormat);
-    status = m_d3d->CheckDeviceType(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, NullFormat, false);
-    status = m_d3d->CheckDeviceType(adapter, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, NullFormat, true);
-    //
 
     D3DPRESENT_PARAMETERS params;
     getPresentParams(params);
@@ -128,6 +105,17 @@ public:
 
     if (FAILED(status))
         throw Error("Failed to create D3D9 device");
+
+    D3DVERTEXELEMENT9 elements1[] = {
+      {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+      D3DDECL_END()
+    };
+
+    IDirect3DVertexDeclaration9* decl;
+    m_device->CreateVertexDeclaration(elements1, &decl);
+    m_device->SetVertexDeclaration(decl);
+    DWORD fvf;
+    m_device->GetFVF(&fvf);
 
     // Funny Swapchain Refcounting
     // "One of the things COM does really well, is lifecycle management"
@@ -189,6 +177,7 @@ public:
     // Vertex Shader
     {
       Com<ID3DBlob> blob;
+      Com<ID3DBlob> resultBlob;
 
       status = D3DCompile(
         g_vertexShaderCode.data(),
@@ -197,10 +186,13 @@ public:
         "main",
         "vs_2_0",
         0, 0, &blob,
-        nullptr);
+        &resultBlob);
 
       if (FAILED(status))
-        throw Error("Failed to compile vertex shader");
+      {
+          std::string result(static_cast<const char*>(resultBlob->GetBufferPointer()), resultBlob->GetBufferSize());
+          throw Error("Failed to compile vertex shader " + result);
+      }
 
       status = m_device->CreateVertexShader(reinterpret_cast<const DWORD*>(blob->GetBufferPointer()), &m_vs);
 
@@ -211,6 +203,7 @@ public:
     // Pixel Shader
     {
       Com<ID3DBlob> blob;
+      Com<ID3DBlob> resultBlob;
 
       status = D3DCompile(
         g_pixelShaderCode.data(),
@@ -219,10 +212,13 @@ public:
         "main",
         "ps_2_0",
         0, 0, &blob,
-        nullptr);
+        &resultBlob);
 
       if (FAILED(status))
-        throw Error("Failed to compile pixel shader");
+      {
+          std::string result(static_cast<const char*>(resultBlob->GetBufferPointer()), resultBlob->GetBufferSize());
+          throw Error("Failed to compile pixel shader " + result);
+      }
 
       status = m_device->CreatePixelShader(reinterpret_cast<const DWORD*>(blob->GetBufferPointer()), &m_ps);
 
@@ -235,7 +231,7 @@ public:
 
     m_device->AddRef();
 
-    Com<IDirect3DSurface9> nullSurface;
+    /*Com<IDirect3DSurface9> nullSurface;
     status = m_device->CreateRenderTarget(64, 64, D3DFORMAT(MAKEFOURCC('N', 'U', 'L', 'L')), D3DMULTISAMPLE_NONE, 0, FALSE, &nullSurface, nullptr);
 
     status = m_device->ColorFill(nullSurface.ptr(), nullptr, D3DCOLOR_RGBA(255, 0, 0, 255));
@@ -296,7 +292,7 @@ public:
 
     RECT stretchRect1 = { 0, 0, 640, 720 };
     RECT stretchRect2 = { 640, 0, 1280, 720 };
-    status = m_device->StretchRect(rt.ptr(), &stretchRect1, rt.ptr(), &stretchRect2, D3DTEXF_LINEAR);
+    status = m_device->StretchRect(rt.ptr(), &stretchRect1, rt.ptr(), &stretchRect2, D3DTEXF_LINEAR);*/
 
     /// 
 
@@ -355,7 +351,7 @@ public:
 
     ///
 
-    Com<IDirect3DTexture9> myRT;
+    /*Com<IDirect3DTexture9> myRT;
     status = m_device->CreateTexture(512, 256, 1, 0, D3DFMT_DXT1, D3DPOOL_DEFAULT, &myRT, nullptr);
     
     Com<IDirect3DSurface9> myRTSurf;
@@ -374,11 +370,108 @@ public:
 
     m_device->SetRenderState(D3DRS_ALPHAREF, 256 + 255);
     m_device->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_LESSEQUAL);
-    m_device->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
+    m_device->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);  */
+
+
+    {
+      std::array<float, 12> vertices = {
+        -1.0f, 1.0f, 0.0f,
+        -1.0f, -1.0f, 1.0f,
+        1.0f, -1.0f, 1.0f,
+        1.0f, 1.0f, 0.0f,
+      };
+
+      std::array<uint32_t, 8> indices = {
+        0, 1, 2, 2, 3, 0
+      };
+
+      Com<IDirect3DVertexBuffer9> vb;
+      status = m_device->CreateVertexBuffer(12 * 4, D3DUSAGE_DYNAMIC, 0, D3DPOOL_DEFAULT, &vb, nullptr);
+      void* lockData = nullptr;
+      status = vb->Lock(0, 0, &lockData, 0);
+      memcpy(lockData, vertices.data(), 12 * 4);
+      status = vb->Unlock();
+
+      Com<IDirect3DIndexBuffer9> ib;
+      status = m_device->CreateIndexBuffer(12 * 4, D3DUSAGE_DYNAMIC, D3DFMT_INDEX32, D3DPOOL_DEFAULT, &ib, nullptr);
+      lockData = nullptr;
+      status = ib->Lock(0, 0, &lockData, 0);
+      memcpy(lockData, indices.data(), 8 * 4);
+      status = ib->Unlock();
+
+      status = m_device->CreateTexture(1280, 720, 1, D3DUSAGE_DEPTHSTENCIL, (D3DFORMAT) MAKEFOURCC('I', 'N', 'T', 'Z'), D3DPOOL_DEFAULT, &m_ds, nullptr);
+      Com<IDirect3DSurface9> dsSurf;
+      m_ds->GetSurfaceLevel(0, &dsSurf);
+
+      Com<IDirect3DTexture9> nullRT;
+      status = m_device->CreateTexture(1280, 720, 1, D3DUSAGE_RENDERTARGET, (D3DFORMAT) MAKEFOURCC('N', 'U', 'L', 'L'), D3DPOOL_DEFAULT, &nullRT, nullptr);
+      Com<IDirect3DSurface9> nullSurf;
+      nullRT->GetSurfaceLevel(0, &nullSurf);
+
+    // Pixel Shader
+    Com<IDirect3DPixelShader9> dsPixelShader;
+    {
+      Com<ID3DBlob> blob;
+      Com<ID3DBlob> resultBlob;
+
+      status = D3DCompile(
+        g_dsPixelShaderCode.data(),
+        g_dsPixelShaderCode.length(),
+        nullptr, nullptr, nullptr,
+        "main",
+        "ps_2_0",
+        0, 0, &blob,
+        &resultBlob);
+
+
+      if (FAILED(status))
+      {
+          std::string result(static_cast<const char*>(resultBlob->GetBufferPointer()), resultBlob->GetBufferSize());
+          throw Error("Failed to compile pixel shader " + result);
+      }
+
+      status = m_device->CreatePixelShader(reinterpret_cast<const DWORD*>(blob->GetBufferPointer()), &dsPixelShader);
+
+      if (FAILED(status))
+        throw Error("Failed to create pixel shader");
+    }
+
+
+      m_device->SetPixelShader(dsPixelShader.ptr());
+      status = m_device->SetStreamSource(0, vb.ptr(), 0, 12);
+      status = m_device->SetIndices(ib.ptr());
+
+      m_device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+
+      status = m_device->BeginScene();
+
+      status = m_device->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
+      status = m_device->SetDepthStencilSurface(dsSurf.ptr());
+      status = m_device->SetRenderTarget(0, nullSurf.ptr());
+      D3DVIEWPORT9 vp;
+      vp.Width = 1280;
+      vp.Height = 720;
+      vp.X = 0;
+      vp.Y = 0;
+      constexpr float zBias = 0.001f;
+      vp.MinZ = 0.4f;
+      //vp.MaxZ = 0.49999f;
+      //vp.MinZ = 0.5f;
+      vp.MaxZ = vp.MinZ;
+      status = m_device->SetViewport(&vp);
+      status = m_device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 8, 0, 2);
+      status = m_device->EndScene();
+      m_device->SetPixelShader(m_ps.ptr());
+    }
   }
   
   void run() {
     this->adjustBackBuffer();
+
+    Com<IDirect3DSurface9> backbuffer;
+    m_device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backbuffer);
+    m_device->SetRenderTarget(0, backbuffer.ptr());
+    m_device->SetDepthStencilSurface(nullptr);
 
     m_device->BeginScene();
 
@@ -398,7 +491,9 @@ public:
       0.5f,
       0);
 
-    m_device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1);
+    //m_device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1);
+    m_device->SetTexture(0, m_ds.ptr());
+    m_device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 8, 0, 2);
 
     m_device->EndScene();
 
@@ -461,6 +556,8 @@ private:
   Com<IDirect3DPixelShader9>    m_ps;
   Com<IDirect3DVertexBuffer9>   m_vb;
   Com<IDirect3DVertexDeclaration9> m_decl;
+
+  Com<IDirect3DTexture9> m_ds;
   
 };
 
