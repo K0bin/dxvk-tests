@@ -3,7 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <io.h>
-#include <Fcntl.h>
+#include <fcntl.h>
 
 
 #define D3D_DEBUG_INFO
